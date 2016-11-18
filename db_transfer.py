@@ -14,6 +14,7 @@ import importloader
 import platform
 import datetime
 import fcntl
+import platform
 
 
 switchrule = None
@@ -159,7 +160,7 @@ class DbTransfer(object):
 							deny_str = deny_str + "\nALL: [" + str(realip) +"]/128"
 
 						logging.info("Local Block ip:" + str(realip))
-				if get_config().CLOUDSAFE == 0:
+				if get_config().CLOUDSAFE == 0 and platform.system() != "Windows":
 					deny_file=open('/etc/hosts.deny','a')
 					fcntl.flock(deny_file.fileno(),fcntl.LOCK_EX)
 					deny_file.write(deny_str + "\n")
@@ -168,12 +169,18 @@ class DbTransfer(object):
 		return update_transfer
 
 	def uptime(self):
-		with open('/proc/uptime', 'r') as f:
-			return float(f.readline().split()[0])
+		if platform.system() != "Windows":
+			with open('/proc/uptime', 'r') as f:
+				return float(f.readline().split()[0])
+		else:
+			return 0
 
 	def load(self):
 		import os
-		return os.popen("cat /proc/loadavg | awk '{ print $1\" \"$2\" \"$3 }'").readlines()[0]
+		if platform.system() != "Windows":
+			return os.popen("cat /proc/loadavg | awk '{ print $1\" \"$2\" \"$3 }'").readlines()[0]
+		else:
+			return "0.00 0.00 0.00"
 
 	def trafficShow(self,Traffic):
 		if Traffic < 1024 :
@@ -360,7 +367,7 @@ class DbTransfer(object):
 		for row in rows:
 			if row['is_multi_user'] == 1:
 				continue
-			
+
 			md5_users[row['id']] = row.copy()
 			del md5_users[row['id']]['u']
 			del md5_users[row['id']]['d']

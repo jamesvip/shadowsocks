@@ -29,6 +29,7 @@ import threading
 import sys
 from socket import *
 from configloader import load_config, get_config
+import platform
 
 class MainThread(threading.Thread):
 	def __init__(self, params):
@@ -51,13 +52,22 @@ class ServerPool(object):
 
 		self.mgr = None #asyncmgr.ServerMgr()
 
+		self.is_win = False
+		if platform.system() == "Windows":
+			self.is_win = True
+
 		self.eventloop_pool = {}
 		self.thread_pool = {}
 		self.dns_resolver_pool = {}
 
 		self.dns_resolver = asyncdns.DNSResolver()
 
-		self.loop = eventloop.EventLoop()
+		if self.is_win:
+			from asyncio.windows_events import ProactorEventLoop
+	        self.loop = ProactorEventLoop()
+			asyncio.set_event_loop(self.loop)
+		else:
+			self.loop = eventloop.EventLoop()
 		self.thread = MainThread( (self.loop, self.dns_resolver, self.mgr) )
 		self.thread.start()
 
@@ -138,12 +148,18 @@ class ServerPool(object):
 						logging.info("starting server at [%s]:%d" % (common.to_str(a_config['server']), port))
 
 						tcp_server = tcprelay.TCPRelay(a_config, self.dns_resolver, False, stat_counter=self.stat_counter)
-						tcp_server.add_to_loop(self.loop)
+						if self.is_win:
+							self.loop.create_server(tcp_server)
+						else:
+							tcp_server.add_to_loop(self.loop)
 						self.tcp_ipv6_servers_pool.update({port: tcp_server})
 
 						if a_config['is_multi_user'] == 0:
 							udp_server = udprelay.UDPRelay(a_config, self.dns_resolver, False, stat_counter=self.stat_counter)
-							udp_server.add_to_loop(self.loop)
+							if self.is_win:
+								self.loop.create_server(udp_server)
+							else:
+								udp_server.add_to_loop(self.loop)
 							self.udp_ipv6_servers_pool.update({port: udp_server})
 
 						if common.to_str(a_config['server_ipv6']) == "::":
@@ -165,12 +181,18 @@ class ServerPool(object):
 						logging.info("starting server at %s:%d" % (common.to_str(a_config['server']), port))
 
 						tcp_server = tcprelay.TCPRelay(a_config, self.dns_resolver, False)
-						tcp_server.add_to_loop(self.loop)
+						if self.is_win:
+							self.loop.create_server(tcp_server)
+						else:
+							tcp_server.add_to_loop(self.loop)
 						self.tcp_servers_pool.update({port: tcp_server})
 
 						if a_config['is_multi_user'] == 0:
 							udp_server = udprelay.UDPRelay(a_config, self.dns_resolver, False)
-							udp_server.add_to_loop(self.loop)
+							if self.is_win:
+								self.loop.create_server(udp_server)
+							else:
+								udp_server.add_to_loop(self.loop)
 							self.udp_servers_pool.update({port: udp_server})
 
 					except Exception as e:
@@ -178,7 +200,13 @@ class ServerPool(object):
 							logging.warn("IPV4 %s " % (e,))
 		else:
 			self.dns_resolver_pool[port] = self.dns_resolver = asyncdns.DNSResolver()
-			self.eventloop_pool[port] = eventloop.EventLoop()
+
+			if self.is_win:
+				from asyncio.windows_events import ProactorEventLoop
+		        self.eventloop_pool[port] = ProactorEventLoop()
+				asyncio.set_event_loop(self.eventloop_pool[port])
+			else:
+				self.eventloop_pool[port] = eventloop.EventLoop()
 			self.thread_pool[port] = MainThread( (self.eventloop_pool[port], self.dns_resolver_pool[port], self.mgr) )
 			self.thread_pool[port].start()
 
@@ -200,7 +228,10 @@ class ServerPool(object):
 						logging.info("starting server at [%s]:%d" % (common.to_str(a_config['server']), port))
 
 						tcp_server = tcprelay.TCPRelay(a_config, self.dns_resolver_pool[port], False, stat_counter=self.stat_counter)
-						tcp_server.add_to_loop(self.eventloop_pool[port])
+						if self.is_win:
+							self.loop.create_server(tcp_server)
+						else:
+							tcp_server.add_to_loop(self.loop)
 						self.tcp_ipv6_servers_pool.update({port: tcp_server})
 
 						if a_config['is_multi_user'] == 0:
@@ -227,7 +258,10 @@ class ServerPool(object):
 						logging.info("starting server at %s:%d" % (common.to_str(a_config['server']), port))
 
 						tcp_server = tcprelay.TCPRelay(a_config, self.dns_resolver_pool[port], False)
-						tcp_server.add_to_loop(self.eventloop_pool[port])
+						if self.is_win:
+							self.loop.create_server(tcp_server)
+						else:
+							tcp_server.add_to_loop(self.loop)
 						self.tcp_servers_pool.update({port: tcp_server})
 
 						if a_config['is_multi_user'] == 0:
